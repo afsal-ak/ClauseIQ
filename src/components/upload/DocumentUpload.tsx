@@ -19,7 +19,8 @@ export default function DocumentUpload() {
   const [documentText, setDocumentText] = useState("");
 
   const [clauses, setClauses] = useState([]);
-
+  const [risks, setRisks] =
+    useState<any[]>([]);
 
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -108,6 +109,9 @@ export default function DocumentUpload() {
         );
         setClauses(
           response.clauses
+        );
+        setRisks(
+          response.risks || []
         );
       } catch (error) {
         console.error(error);
@@ -288,6 +292,58 @@ export default function DocumentUpload() {
                 </div>
               )
             )}
+          </div>
+        )}
+
+        {risks.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-xl font-semibold mb-4">
+              Risk Analysis
+            </h2>
+
+            <div className="space-y-4">
+              {risks.map(
+                (
+                  risk,
+                  index
+                ) => (
+                  <div
+                    key={index}
+                    className="border rounded-xl p-4 flex justify-between items-start"
+                  >
+                    <div>
+                      <h3 className="font-semibold">
+                        {
+                          risk.title
+                        }
+                      </h3>
+
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {
+                          risk.reason
+                        }
+                      </p>
+                    </div>
+
+                    <span
+                      className={`px-3 py-1 rounded-full text-sm font-medium
+              ${risk.risk ===
+                          "HIGH"
+                          ? "bg-red-100 text-red-600"
+                          : risk.risk ===
+                            "MEDIUM"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-green-100 text-green-700"
+                        }`}
+                    >
+                      {
+                        risk.risk
+                      }
+                    </span>
+                  </div>
+                )
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { processDocument } from "@/lib/document/processor";
 import { legalChunker } from "@/lib/chunker/legalChunker";
+import { analyzeRisk } from "@/lib/risk/riskAnalyzer";
 
 
 export async function POST(
@@ -31,12 +32,16 @@ export async function POST(
       legalChunker(
         extractedText
       );
-      
+      const risks =
+  analyzeRisk(
+    clauses
+  );
     return NextResponse.json({
       success: true,
       filename: file.name,
       extractedText,
       clauses,
+      risks
     });
   } catch (error) {
     console.error(error);

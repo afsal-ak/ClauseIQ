@@ -14,9 +14,26 @@ export const analyzeRisk = (
   return clauses.map(
     (clause) => {
       const text =
-        `${clause.title} ${clause.text}`;
+        `${clause.title} ${clause.text}`.toLowerCase();
 
       // HIGH RISK
+      if (
+        RISK_PATTERNS.unlimitedLiability.test(
+          text
+        )
+      ) {
+        return {
+          clauseNumber:
+            clause.clauseNumber,
+          title:
+            clause.title,
+          risk:
+            "HIGH",
+          reason:
+            "Unlimited liability exposure",
+        };
+      }
+
       if (
         RISK_PATTERNS.nonSolicitation.test(
           text
@@ -30,29 +47,11 @@ export const analyzeRisk = (
           risk:
             "HIGH",
           reason:
-            "Contains non-solicitation clause",
+            "Contains employee restriction clause",
         };
       }
 
-      // LIABILITY
-      if (
-        RISK_PATTERNS.liability.test(
-          text
-        )
-      ) {
-        return {
-          clauseNumber:
-            clause.clauseNumber,
-          title:
-            clause.title,
-          risk:
-            "MEDIUM",
-          reason:
-            "Contains liability obligations",
-        };
-      }
-
-      // DURATION
+      // TERM DURATION
       const duration =
         text.match(
           /(\d+)\s*months?/i
@@ -72,11 +71,46 @@ export const analyzeRisk = (
           risk:
             "HIGH",
           reason:
-            "Term exceeds 12 months",
+            `Contract term exceeds 12 months (${duration[1]} months)`,
         };
       }
 
-      // ARBITRATION
+      // MEDIUM RISK
+      if (
+        RISK_PATTERNS.liability.test(
+          text
+        )
+      ) {
+        return {
+          clauseNumber:
+            clause.clauseNumber,
+          title:
+            clause.title,
+          risk:
+            "MEDIUM",
+          reason:
+            "Contains liability obligations",
+        };
+      }
+
+      if (
+        RISK_PATTERNS.termination.test(
+          text
+        )
+      ) {
+        return {
+          clauseNumber:
+            clause.clauseNumber,
+          title:
+            clause.title,
+          risk:
+            "MEDIUM",
+          reason:
+            "Termination clause detected",
+        };
+      }
+
+      // LOW RISK
       if (
         RISK_PATTERNS.arbitration.test(
           text
@@ -91,6 +125,23 @@ export const analyzeRisk = (
             "LOW",
           reason:
             "Contains dispute resolution process",
+        };
+      }
+
+      if (
+        RISK_PATTERNS.confidentiality.test(
+          text
+        )
+      ) {
+        return {
+          clauseNumber:
+            clause.clauseNumber,
+          title:
+            clause.title,
+          risk:
+            "LOW",
+          reason:
+            "Standard confidentiality clause",
         };
       }
 
