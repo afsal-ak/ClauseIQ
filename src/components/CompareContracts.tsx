@@ -1,65 +1,209 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+} from "react";
+
 import {
   UploadCloud,
-  FileText,
   Loader2,
   Scale,
   X,
+  Sparkles,
+  FileText,
+  GitCompareArrows,
 } from "lucide-react";
 
 import { compareDocuments } from "@/services/comparison.service";
+
 import ClauseDiff from "./ClauseDiff";
 
+import AIRiskAnalysis from "@/components/AIRiskAnalysis";
+
+import { toast } from "sonner";
+
+const STORAGE_KEY =
+  "clauseiq_compare_result";
+
 export default function CompareContracts() {
+  const aiSectionRef =
+    useRef<HTMLDivElement | null>(
+      null
+    );
+
   const [oldFile, setOldFile] =
-    useState<File | null>(null);
+    useState<File | null>(
+      null
+    );
 
   const [newFile, setNewFile] =
-    useState<File | null>(null);
+    useState<File | null>(
+      null
+    );
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
+  const [oldFileName,
+    setOldFileName] =
     useState("");
 
-  const [comparison, setComparison] =
+  const [newFileName,
+    setNewFileName] =
+    useState("");
+
+  const [loading,
+    setLoading] =
+    useState(false);
+
+  const [aiLoading,
+    setAiLoading] =
+    useState(false);
+
+  const [error,
+    setError] =
+    useState("");
+
+  const [aiError,
+    setAiError] =
+    useState("");
+
+  const [comparison,
+    setComparison] =
     useState<any[]>([]);
+
+  const [aiRisks,
+    setAiRisks] =
+    useState<any[]>([]);
+
+  const [sortBy,
+    setSortBy] =
+    useState("MODIFIED");
 
   const allowedTypes = [
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ];
 
+  useEffect(() => {
+    const saved =
+      localStorage.getItem(
+        STORAGE_KEY
+      );
+
+    if (!saved) return;
+
+    try {
+      const parsed =
+        JSON.parse(saved);
+
+      setComparison(
+        parsed.comparison || []
+      );
+
+      setAiRisks(
+        parsed.aiRisks || []
+      );
+
+      setOldFileName(
+        parsed.oldFileName || ""
+      );
+
+      setNewFileName(
+        parsed.newFileName || ""
+      );
+    } catch {
+      localStorage.removeItem(
+        STORAGE_KEY
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        comparison,
+        aiRisks,
+        oldFileName,
+        newFileName,
+      })
+    );
+  }, [
+    comparison,
+    aiRisks,
+    oldFileName,
+    newFileName,
+  ]);
+
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     type: "old" | "new"
   ) => {
-    const selectedFile =
+    const file =
       e.target.files?.[0];
 
-    if (!selectedFile) return;
+    if (!file) return;
 
     if (
       !allowedTypes.includes(
-        selectedFile.type
+        file.type
       )
     ) {
       setError(
-        "Only DOCX files are allowed"
+        "Only DOCX files are supported"
       );
+
+      toast.error(
+        "Only DOCX files supported"
+      );
+
       return;
     }
 
     setError("");
 
-    if (type === "old") {
-      setOldFile(selectedFile);
+    if (
+      type === "old"
+    ) {
+      setOldFile(file);
+      setOldFileName(
+        file.name
+      );
     } else {
-      setNewFile(selectedFile);
+      setNewFile(file);
+      setNewFileName(
+        file.name
+      );
     }
   };
+
+  const removeFile = (
+    type: "old" | "new"
+  ) => {
+    if (
+      type === "old"
+    ) {
+      setOldFile(null);
+      setOldFileName("");
+    } else {
+      setNewFile(null);
+      setNewFileName("");
+    }
+  };
+
+  const scrollToAI =
+    () => {
+      setTimeout(() => {
+        aiSectionRef.current?.scrollIntoView(
+          {
+            behavior:
+              "smooth",
+            block:
+              "start",
+          }
+        );
+      }, 300);
+    };
 
   const handleCompare =
     async () => {
@@ -68,331 +212,535 @@ export default function CompareContracts() {
         !newFile
       ) {
         setError(
-          "Please upload both documents"
+          "Upload both files"
         );
+
+        toast.error(
+          "Please upload both contracts"
+        );
+
         return;
       }
 
       try {
         setLoading(true);
         setError("");
+        setAiError("");
 
-        const response =
+        setComparison([]);
+        setAiRisks([]);
+
+        toast.loading(
+          "Comparing documents...",
+          {
+            id:
+              "compare",
+          }
+        );
+
+        const compareRes =
           await compareDocuments(
             oldFile,
-            newFile
+            newFile,
+            false
           );
-
-        if (
-          !response.success
-        ) {
-          throw new Error(
-            response.message
-          );
-        }
 
         setComparison(
-          response.comparison ||
+          compareRes.comparison ||
             []
         );
-      } catch (error) {
-        console.error(error);
 
-        setError(
-          "Failed to compare contracts"
+        toast.success(
+          "Comparison completed",
+          {
+            id:
+              "compare",
+          }
         );
-      } finally {
-        setLoading(false);
+
+        setLoading(
+          false
+        );
+
+        setAiLoading(
+          true
+        );
+
+        toast.loading(
+          "AI analyzing contract...",
+          {
+            id:
+              "ai",
+          }
+        );
+
+        compareDocuments(
+          oldFile,
+          newFile,
+          true
+        )
+          .then(
+            (
+              res
+            ) => {
+              if (
+                !res.success
+              ) {
+                throw new Error(
+                  res.message
+                );
+              }
+
+              setAiRisks(
+                res.aiRisks ||
+                  []
+              );
+
+              toast.success(
+                "AI analysis completed",
+                {
+                  id:
+                    "ai",
+                }
+              );
+
+              scrollToAI();
+            }
+          )
+          .catch(
+            (
+              err
+            ) => {
+              console.error(
+                err
+              );
+
+              setAiError(
+                "Failed to analyze risks"
+              );
+
+              toast.error(
+                "AI analysis failed",
+                {
+                  id:
+                    "ai",
+                }
+              );
+            }
+          )
+          .finally(
+            () =>
+              setAiLoading(
+                false
+              )
+          );
+      } catch {
+        setLoading(
+          false
+        );
+
+        toast.error(
+          "Comparison failed",
+          {
+            id:
+              "compare",
+          }
+        );
       }
     };
 
+  const [showAllClauses,
+  setShowAllClauses] =
+  useState(false);
+
+const sortedComparison =
+  useMemo(() => {
+    const riskMap =
+      aiRisks.reduce(
+        (
+          acc,
+          risk
+        ) => {
+          acc[
+            risk.clauseNumber
+          ] =
+            risk.risk;
+
+          return acc;
+        },
+        {} as Record<
+          string,
+          "HIGH" |
+          "MEDIUM" |
+          "LOW"
+        >
+      );
+
+    const priority = {
+      HIGH: 3,
+      MEDIUM: 2,
+      LOW: 1,
+    } as const;
+
+    const sorted = [
+      ...comparison,
+    ].sort(
+      (a, b) => {
+        // changed first
+        const changedA =
+          a.status !==
+          "UNCHANGED"
+            ? 1
+            : 0;
+
+        const changedB =
+          b.status !==
+          "UNCHANGED"
+            ? 1
+            : 0;
+
+        if (
+          changedA !==
+          changedB
+        ) {
+          return (
+            changedB -
+            changedA
+          );
+        }
+
+        const riskA =
+          (riskMap[
+            a.clauseNumber
+          ] ||
+            "LOW") as keyof typeof priority;
+
+        const riskB =
+          (riskMap[
+            b.clauseNumber
+          ] ||
+            "LOW") as keyof typeof priority;
+
+        return (
+          priority[
+            riskB
+          ] -
+          priority[
+            riskA
+          ]
+        );
+      }
+    );
+
+    // only changed clauses initially
+    return showAllClauses
+      ? sorted
+      : sorted.filter(
+          (
+            clause
+          ) =>
+            clause.status !==
+            "UNCHANGED"
+        );
+  }, [
+    comparison,
+    aiRisks,
+    showAllClauses,
+  ]);
+
   return (
-    <main className="min-h-screen bg-background px-4 py-10">
-      <div className="max-w-6xl mx-auto bg-card rounded-[24px] shadow-lg border p-8">
-        {/* HEADER */}
-        <div className="text-center mb-10">
-          <div className="bg-primary/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5">
-            <Scale className="text-primary w-10 h-10" />
+    <main className="min-h-screen bg-muted/20 p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="rounded-[32px] border bg-card p-10 shadow-sm mb-8">
+          <div className="flex items-start gap-4">
+            <div className="bg-primary/10 rounded-3xl p-5">
+              <Scale className="w-10 h-10 text-primary" />
+            </div>
+
+            <div>
+              <h1 className="text-4xl font-bold">
+                ClauseIQ
+              </h1>
+
+              <p className="text-muted-foreground mt-2 max-w-2xl">
+                AI-powered
+                legal clause
+                comparison platform
+                that detects
+                contract changes,
+                legal risks,
+                missing clauses,
+                and modification
+                impact instantly.
+              </p>
+            </div>
           </div>
-
-          <h1 className="text-4xl font-bold">
-            ClauseIQ
-          </h1>
-
-          <p className="text-muted-foreground mt-2">
-            Compare legal contracts
-            and detect clause
-            changes instantly
-          </p>
         </div>
 
-        {error && (
-          <p className="text-red-500 text-center mb-5">
-            {error}
-          </p>
-        )}
-
-        {/* FILE UPLOADS */}
         <div className="grid md:grid-cols-2 gap-6">
-          {/* ORIGINAL */}
-          <div className="border rounded-[24px] p-6">
-            <h2 className="font-semibold text-lg mb-5">
-              Original Contract
-            </h2>
-
-            <label className="border-2 border-dashed rounded-[20px] p-10 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition">
-              <UploadCloud className="w-12 h-12 text-primary mb-4" />
-
-              <p className="font-medium">
-                Upload Original
-                Contract
-              </p>
-
-              <p className="text-sm text-muted-foreground">
-                DOCX supported
-              </p>
-
-              <input
-                type="file"
-                accept=".docx"
-                className="hidden"
-                onChange={(e) =>
-                  handleFileChange(
-                    e,
-                    "old"
-                  )
+          {[
+            {
+              title:
+                "Original Contract",
+              type: "old",
+              fileName:
+                oldFileName,
+            },
+            {
+              title:
+                "Revised Contract",
+              type: "new",
+              fileName:
+                newFileName,
+            },
+          ].map(
+            (item) => (
+              <div
+                key={
+                  item.title
                 }
-              />
-            </label>
-
-            {oldFile && (
-              <div className="mt-4 border rounded-xl p-4 flex items-center justify-between">
-                <div className="flex gap-3 items-center">
-                  <FileText className="text-primary" />
-
-                  <div>
-                    <p className="font-medium">
-                      {
-                        oldFile.name
-                      }
-                    </p>
-
-                    <p className="text-sm text-muted-foreground">
-                      {(
-                        oldFile.size /
-                        1024 /
-                        1024
-                      ).toFixed(
-                        2
-                      )}{" "}
-                      MB
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() =>
-                    setOldFile(
-                      null
-                    )
+                className="rounded-3xl border bg-card p-8"
+              >
+                <h2 className="font-semibold text-lg mb-5">
+                  {
+                    item.title
                   }
-                >
-                  <X className="text-red-500" />
-                </button>
-              </div>
-            )}
-          </div>
+                </h2>
 
-          {/* REVISED */}
-          <div className="border rounded-[24px] p-6">
-            <h2 className="font-semibold text-lg mb-5">
-              Revised Contract
-            </h2>
+                <label className="border-2 border-dashed rounded-3xl p-12 flex flex-col items-center cursor-pointer hover:border-primary transition">
+                  <UploadCloud className="w-12 h-12 mb-3 text-primary" />
 
-            <label className="border-2 border-dashed rounded-[20px] p-10 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition">
-              <UploadCloud className="w-12 h-12 text-primary mb-4" />
+                  <p className="font-medium">
+                    Upload DOCX
+                  </p>
 
-              <p className="font-medium">
-                Upload Revised
-                Contract
-              </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Drag or
+                    click to
+                    upload
+                  </p>
 
-              <p className="text-sm text-muted-foreground">
-                DOCX supported
-              </p>
+                  <input
+                    hidden
+                    type="file"
+                    accept=".docx"
+                    onChange={(
+                      e
+                    ) =>
+                      handleFileChange(
+                        e,
+                        item.type as
+                          any
+                      )
+                    }
+                  />
+                </label>
 
-              <input
-                type="file"
-                accept=".docx"
-                className="hidden"
-                onChange={(e) =>
-                  handleFileChange(
-                    e,
-                    "new"
-                  )
-                }
-              />
-            </label>
+                {!!item.fileName && (
+                  <div className="mt-4 rounded-2xl border bg-muted/40 px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <FileText className="w-5 h-5 text-primary shrink-0" />
 
-            {newFile && (
-              <div className="mt-4 border rounded-xl p-4 flex items-center justify-between">
-                <div className="flex gap-3 items-center">
-                  <FileText className="text-primary" />
+                      <p className="truncate text-sm font-medium">
+                        {
+                          item.fileName
+                        }
+                      </p>
+                    </div>
 
-                  <div>
-                    <p className="font-medium">
-                      {
-                        newFile.name
+                    <button
+                      onClick={() =>
+                        removeFile(
+                          item.type as
+                            any
+                        )
                       }
-                    </p>
-
-                    <p className="text-sm text-muted-foreground">
-                      {(
-                        newFile.size /
-                        1024 /
-                        1024
-                      ).toFixed(
-                        2
-                      )}{" "}
-                      MB
-                    </p>
+                    >
+                      <X className="w-4 h-4 text-muted-foreground hover:text-red-500" />
+                    </button>
                   </div>
-                </div>
-
-                <button
-                  onClick={() =>
-                    setNewFile(
-                      null
-                    )
-                  }
-                >
-                  <X className="text-red-500" />
-                </button>
+                )}
               </div>
-            )}
-          </div>
+            )
+          )}
         </div>
 
-        {/* BUTTON */}
         <button
           onClick={
             handleCompare
           }
           disabled={
             loading ||
-            !oldFile ||
-            !newFile
+            aiLoading
           }
-          className="w-full mt-8 bg-primary text-white py-4 rounded-[16px] font-medium flex justify-center items-center gap-2 disabled:opacity-50"
+          className="w-full mt-8 h-14 rounded-2xl bg-primary text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? (
-            <>
+          {loading ||
+          aiLoading ? (
+            <div className="flex items-center justify-center gap-2">
               <Loader2 className="animate-spin w-5 h-5" />
-              Comparing...
-            </>
+              {loading
+                ? "Comparing Contracts..."
+                : "AI Analyzing..."}
+            </div>
           ) : (
-            "Compare Contracts"
+            <div className="flex items-center justify-center gap-2">
+              <GitCompareArrows className="w-5 h-5" />
+              Compare Contracts
+            </div>
           )}
         </button>
 
-        {/* RESULTS */}
-        {comparison.length >
-          0 && (
+        {!!comparison.length && (
           <div className="mt-10">
-            <h2 className="text-2xl font-semibold mb-5">
-              Comparison
-              Results
-            </h2>
+            <div>
+              <div className="flex justify-between mb-5">
+                <h2 className="text-2xl font-bold">
+                  Comparison
+                </h2>
 
-            <div className="space-y-4">
-              {comparison.map(
-                (
-                  item,
-                  index
-                ) => (
-                  <div
-                    key={
-                      index
-                    }
-                    className="border rounded-xl p-5 flex justify-between items-start"
-                  >
-                    <div className="flex-1">
-                      <h3 className="font-semibold">
-                        {
-                          item.clauseNumber
-                        }
-                        {" - "}
-                        {
-                          item.title
-                        }
-                      </h3>
-
-                      {/* {item.oldText && (
-                        <div className="mt-3">
-                          <p className="font-medium text-sm">
-                            Old
-                            Clause
-                          </p>
-
-                          <p className="text-sm text-muted-foreground">
-                            {item.oldText.slice(
-                              0,
-                              200
-                            )}
-                          </p>
-                        </div>
-                      )}
-
-                      {item.newText && (
-                        <div className="mt-3">
-                          <p className="font-medium text-sm">
-                            New
-                            Clause
-                          </p>
-
-                          <p className="text-sm text-muted-foreground">
-                            {item.newText.slice(
-                              0,
-                              200
-                            )}
-                          </p>
-                        </div>
-                      )} */}
-                      <ClauseDiff
-  diff={item.diff}
-  oldText={
-    item.oldText
-  }
-  newText={
-    item.newText
-  }
-  status={
-    item.status
-  }
-/>
-                    </div>
-
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium
-                      ${
-                        item.status ===
-                        "MODIFIED"
-                          ? "bg-red-100 text-red-600"
-                          : item.status ===
-                              "ADDED"
-                            ? "bg-green-100 text-green-700"
-                            : item.status ===
-                                "REMOVED"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {
-                        item.status
+                <select
+                  className="border rounded-xl px-4"
+                  value={
+                    sortBy
+                  }
+                  onChange={(
+                    e
+                  ) =>
+                    setSortBy(
+                      e.target
+                        .value
+                    )
+                  }
+                >
+                  <option value="MODIFIED">
+                    Modified First
+                  </option>
+                </select>
+              </div>
+{comparison.some(
+  (
+    item
+  ) =>
+    item.status ===
+    "UNCHANGED"
+) && (
+  <div className="mb-5 flex justify-center">
+    <button
+      onClick={() =>
+        setShowAllClauses(
+          !showAllClauses
+        )
+      }
+      className="rounded-2xl border px-5 py-3 text-sm font-medium hover:bg-muted transition"
+    >
+      {showAllClauses
+        ? "Hide unchanged clauses"
+        : `Read more • Show ${
+            comparison.filter(
+              (
+                item
+              ) =>
+                item.status ===
+                "UNCHANGED"
+            ).length
+          } unchanged clauses`}
+    </button>
+  </div>
+)}
+              <div className="space-y-5">
+                {sortedComparison.map(
+                  (
+                    item,
+                    index
+                  ) => (
+                    <div
+                      key={
+                        index
                       }
-                    </span>
+                      className="rounded-3xl border bg-card p-6"
+                    >
+                      <div className="flex justify-between">
+                        <h3 className="font-semibold text-lg">
+                          {
+                            item.clauseNumber
+                          }{" "}
+                          -{" "}
+                          {
+                            item.title
+                          }
+                        </h3>
+
+                        <span className="rounded-full bg-primary/10 text-primary px-4 py-2 text-sm">
+                          {
+                            item.status
+                          }
+                        </span>
+                      </div>
+
+                      <ClauseDiff
+                        diff={
+                          item.diff
+                        }
+                        oldText={
+                          item.oldText
+                        }
+                        newText={
+                          item.newText
+                        }
+                        status={
+                          item.status
+                        }
+                      />
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+
+            <div
+              ref={
+                aiSectionRef
+              }
+              className="mt-12"
+            >
+              
+              {aiLoading ? (
+                <div className="rounded-3xl border bg-card p-8">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="animate-spin text-primary" />
+
+                    <div>
+                      <p className="font-medium">
+                        AI analyzing contract
+                      </p>
+
+                      <p className="text-sm text-muted-foreground">
+                        Detecting legal
+                        risks &
+                        clause impact...
+                      </p>
+                    </div>
                   </div>
-                )
+                </div>
+              ) : aiError ? (
+                <div className="rounded-3xl border border-red-200 bg-red-50 p-6">
+                  <p className="font-semibold text-red-700">
+                    AI analysis failed
+                  </p>
+
+                  <p className="text-sm text-red-600 mt-2">
+                    {
+                      aiError
+                    }
+                  </p>
+                </div>
+              ) : (
+                <AIRiskAnalysis
+                  risks={
+                    aiRisks
+                  }
+                />
               )}
             </div>
           </div>
@@ -403,91 +751,109 @@ export default function CompareContracts() {
 }
 // "use client";
 
-// import { useState } from "react";
+// import { useMemo, useState } from "react";
+
 // import {
 //   UploadCloud,
 //   FileText,
-//   X,
 //   Loader2,
 //   Scale,
+//   X,
+//   Sparkles,
 // } from "lucide-react";
 
-// import { uploadDocument } from "@/services/upload.service";
+// import { compareDocuments }
+//   from "@/services/comparison.service";
 
-// export default function DocumentUpload() {
+// import ClauseDiff
+//   from "./ClauseDiff";
 
-//   const [file, setFile] = useState<File | null>(null);
-//   const [loading, setLoading] = useState(false);
-//   const [localError, setLocalError] = useState("");
-//   const [documentText, setDocumentText] = useState("");
+// import AIRiskAnalysis
+//   from "@/components/AIRiskAnalysis";
+// import { toast }
+//   from "sonner";
+// export default function CompareContracts() {
+//   const [oldFile, setOldFile] =
+//     useState<File | null>(
+//       null
+//     );
 
-//   const [clauses, setClauses] = useState([]);
-//   const [risks, setRisks] =
+//   const [newFile, setNewFile] =
+//     useState<File | null>(
+//       null
+//     );
+
+//   const [loading, setLoading] =
+//     useState(false);
+
+//   const [aiLoading, setAiLoading] =
+//     useState(false);
+
+//   const [error, setError] =
+//     useState("");
+//   const [aiError, setAiError] =
+//     useState("");
+//   const [comparison, setComparison] =
 //     useState<any[]>([]);
 
+//   const [aiRisks, setAiRisks] =
+//     useState<any[]>(([]));
+
+//   const [sortBy, setSortBy] =
+//     useState(
+//       "MODIFIED"
+//     );
+
+//   const allowedTypes = [
+//     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+//   ];
+
 //   const handleFileChange = (
-//     e: React.ChangeEvent<HTMLInputElement>
+//     e: React.ChangeEvent<HTMLInputElement>,
+//     type: "old" | "new"
 //   ) => {
-//     const selectedFile =
+//     const file =
 //       e.target.files?.[0];
 
-//     if (!selectedFile) return;
-
-//     const allowedTypes = [
-//       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-//     ];
+//     if (!file) return;
 
 //     if (
 //       !allowedTypes.includes(
-//         selectedFile.type
+//         file.type
 //       )
 //     ) {
-//       setLocalError(
-//         "Only DOCX files are allowed"
+//       setError(
+//         "Only DOCX files are supported"
 //       );
-
 //       return;
 //     }
 
-//     setLocalError("");
-//     setFile(selectedFile);
-//   };
-
-//   const handleDrop = (
-//     e: React.DragEvent<HTMLDivElement>
-//   ) => {
-//     e.preventDefault();
-
-//     const droppedFile =
-//       e.dataTransfer.files?.[0];
-
-//     if (!droppedFile) return;
-
-//     const allowedTypes = [
-//       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-//     ];
+//     setError("");
 
 //     if (
-//       !allowedTypes.includes(
-//         droppedFile.type
-//       )
+//       type === "old"
 //     ) {
-//       setLocalError(
-//         "Only DOCX files are allowed"
+//       setOldFile(
+//         file
 //       );
-
-//       return;
+//     } else {
+//       setNewFile(
+//         file
+//       );
 //     }
-
-//     setLocalError("");
-//     setFile(droppedFile);
 //   };
-
-//   const handleUpload =
+//   const handleCompare =
 //     async () => {
-//       if (!file) {
-//         setLocalError(
-//           "Please select a document"
+//       if (
+//         !oldFile ||
+//         !newFile
+//       ) {
+//         setError(
+//           "Upload both files"
+//         );
+
+//         toast.error(
+//           "Please upload both contracts"
 //         );
 
 //         return;
@@ -495,261 +861,439 @@ export default function CompareContracts() {
 
 //       try {
 //         setLoading(true);
+//         setError("");
+//         setAiError("");
+//         setComparison(
+//           []
+//         );
+//         setAiRisks(
+//           []
+//         );
 
-//         const response =
-//           await uploadDocument(file);
+//         toast.loading(
+//           "Comparing documents...",
+//           {
+//             id: "compare",
+//           }
+//         );
 
-//         if (
-//           !response.success
-//         ) {
-//           throw new Error(
-//             response.message
+//         // FAST RESPONSE
+//         const compareRes =
+//           await compareDocuments(
+//             oldFile,
+//             newFile,
+//             false
 //           );
-//         }
 
-//         setDocumentText(
-//           response.extractedText
+//         setComparison(
+//           compareRes.comparison ||
+//           []
 //         );
-//         setClauses(
-//           response.clauses
-//         );
-//         setRisks(
-//           response.risks || []
-//         );
-//       } catch (error) {
-//         console.error(error);
 
-//         setLocalError(
-//           "Failed to process document"
+//         setLoading(
+//           false
 //         );
-//       } finally {
-//         setLoading(false);
+
+//         toast.success(
+//           "Document comparison completed",
+//           {
+//             id: "compare",
+//           }
+//         );
+
+//         // AI START
+//         setAiLoading(
+//           true
+//         );
+
+//         toast.loading(
+//           "AI analysis started...",
+//           {
+//             id: "ai",
+//           }
+//         );
+
+//         compareDocuments(
+//           oldFile,
+//           newFile,
+//           true
+//         )
+//           .then(
+//             (
+//               res
+//             ) => {
+//               if (
+//                 !res.success
+//               ) {
+//                 throw new Error(
+//                   res.message
+//                 );
+//               }
+
+//               setAiRisks(
+//                 res.aiRisks ||
+//                 []
+//               );
+
+//               toast.success(
+//                 "AI analysis completed",
+//                 {
+//                   id: "ai",
+//                 }
+//               );
+//             }
+//           )
+//           .catch(
+//             (
+//               err
+//             ) => {
+//               console.error(
+//                 err
+//               );
+
+//               setAiError(
+//                 "Failed to analyze risks"
+//               );
+
+//               toast.error(
+//                 "AI analysis failed",
+//                 {
+//                   id: "ai",
+//                 }
+//               );
+//             }
+//           )
+//           .finally(
+//             () =>
+//               setAiLoading(
+//                 false
+//               )
+//           );
+//       } catch {
+//         setLoading(
+//           false
+//         );
+
+//         toast.error(
+//           "Comparison failed",
+//           {
+//             id: "compare",
+//           }
+//         );
 //       }
 //     };
+//   const sortedComparison =
+//     useMemo(() => {
+//       const riskMap =
+//         aiRisks.reduce(
+//           (
+//             acc,
+//             risk
+//           ) => {
+//             acc[
+//               risk.clauseNumber
+//             ] =
+//               risk.risk;
+
+//             return acc;
+//           },
+//           {} as Record<
+//             string,
+//             "HIGH" |
+//             "MEDIUM" |
+//             "LOW"
+//           >
+//         );
+
+//       const priority = {
+//         HIGH: 3,
+//         MEDIUM: 2,
+//         LOW: 1,
+//       } as const;
+
+//       return [
+//         ...comparison,
+//       ].sort(
+//         (a, b) => {
+//           // changed first
+//           const changedA =
+//             a.status !==
+//               "UNCHANGED"
+//               ? 1
+//               : 0;
+
+//           const changedB =
+//             b.status !==
+//               "UNCHANGED"
+//               ? 1
+//               : 0;
+
+//           if (
+//             changedA !==
+//             changedB
+//           ) {
+//             return (
+//               changedB -
+//               changedA
+//             );
+//           }
+
+//           const riskA =
+//             (riskMap[
+//               a.clauseNumber
+//             ] ||
+//               "LOW") as keyof typeof priority;
+
+//           const riskB =
+//             (riskMap[
+//               b.clauseNumber
+//             ] ||
+//               "LOW") as keyof typeof priority;
+
+//           return (
+//             priority[
+//             riskB
+//             ] -
+//             priority[
+//             riskA
+//             ]
+//           );
+//         }
+//       );
+//     }, [
+//       comparison,
+//       aiRisks,
+//     ]);
 
 //   return (
-//     <div className="min-h-screen bg-background px-4 py-10 flex items-center justify-center">
-//       <div className="w-full max-w-5xl bg-card rounded-[24px] shadow-lg border p-8">
-//         <div className="text-center mb-8">
-//           <div className="bg-primary/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5">
-//             <Scale className="text-primary w-10 h-10" />
-//           </div>
-
-//           <h1 className="text-3xl font-bold">
-//             ClauseIQ
-//           </h1>
-
-//           <p className="text-muted-foreground mt-2 max-w-2xl mx-auto">
-//             Upload legal
-//             agreements to
-//             analyze clauses,
-//             detect changes,
-//             and assess risk.
-//           </p>
-//         </div>
-
-//         {localError && (
-//           <p className="text-sm text-red-500 text-center mb-4">
-//             {localError}
-//           </p>
-//         )}
-
-//         <div
-//           onDragOver={(e) =>
-//             e.preventDefault()
-//           }
-//           onDrop={
-//             handleDrop
-//           }
-//           className="border-2 border-dashed rounded-[24px] p-14 bg-muted text-center transition hover:border-primary hover:bg-primary/5"
-//         >
-//           <label className="cursor-pointer flex flex-col items-center justify-center">
-//             <div className="bg-primary/10 p-5 rounded-full mb-5">
-//               <UploadCloud className="w-12 h-12 text-primary" />
+//     <main className="min-h-screen bg-muted/20 p-6">
+//       <div className="max-w-7xl mx-auto">
+//         {/* HEADER */}
+//         <div className="rounded-[32px] border bg-card p-10 shadow-sm mb-8">
+//           <div className="flex items-center gap-4">
+//             <div className="bg-primary/10 rounded-3xl p-5">
+//               <Scale className="w-10 h-10 text-primary" />
 //             </div>
 
-//             <h2 className="text-xl font-semibold">
-//               Drag & Drop
-//               or Click to
-//               Upload
-//             </h2>
+//             <div>
+//               <h1 className="text-4xl font-bold">
+//                 ClauseIQ
+//               </h1>
 
-//             <p className="text-sm text-muted-foreground mt-2">
-//               DOCX legal
-//               contracts
-//               supported
-//             </p>
-
-//             <input
-//               type="file"
-//               accept=".docx"
-//               className="hidden"
-//               onChange={
-//                 handleFileChange
-//               }
-//             />
-//           </label>
+//               <p className="text-muted-foreground mt-1">
+//                 AI-powered
+//                 contract
+//                 comparison
+//               </p>
+//             </div>
+//           </div>
 //         </div>
 
-//         {file && (
-//           <div className="mt-6 bg-muted rounded-[16px] p-4 flex items-center justify-between border">
-//             <div className="flex items-center gap-4">
-//               <FileText className="text-primary" />
+//         {/* UPLOAD */}
+//         <div className="grid md:grid-cols-2 gap-6">
+//           {[{
+//             title:
+//               "Original Contract",
+//             type: "old",
+//             file: oldFile,
+//           },
+//           {
+//             title:
+//               "Revised Contract",
+//             type: "new",
+//             file: newFile,
+//           }].map(
+//             (
+//               item
+//             ) => (
+//               <div
+//                 key={
+//                   item.title
+//                 }
+//                 className="rounded-3xl border bg-card p-8"
+//               >
+//                 <h2 className="font-semibold text-lg mb-5">
+//                   {
+//                     item.title
+//                   }
+//                 </h2>
 
-//               <div>
-//                 <p className="font-medium">
-//                   {file.name}
-//                 </p>
+//                 <label className="border-2 border-dashed rounded-3xl p-12 flex flex-col items-center cursor-pointer hover:border-primary transition">
+//                   <UploadCloud className="w-12 h-12 mb-3 text-primary" />
 
-//                 <p className="text-sm text-muted-foreground">
-//                   {(
-//                     file.size /
-//                     1024 /
-//                     1024
-//                   ).toFixed(
-//                     2
-//                   )}{" "}
-//                   MB
-//                 </p>
+//                   <p className="font-medium">
+//                     Upload DOCX
+//                   </p>
+
+//                   <input
+//                     hidden
+//                     type="file"
+//                     accept=".docx"
+//                     onChange={(
+//                       e
+//                     ) =>
+//                       handleFileChange(
+//                         e,
+//                         item.type as any
+//                       )
+//                     }
+//                   />
+//                 </label>
 //               </div>
-//             </div>
-
-//             <button
-//               onClick={() =>
-//                 setFile(
-//                   null
-//                 )
-//               }
-//               className="text-red-500 hover:opacity-80"
-//             >
-//               <X
-//                 size={18}
-//               />
-//             </button>
-//           </div>
-//         )}
+//             )
+//           )}
+//         </div>
 
 //         <button
 //           onClick={
-//             handleUpload
+//             handleCompare
 //           }
 //           disabled={
-//             !file ||
 //             loading
 //           }
-//           className="w-full mt-6 bg-primary text-white py-4 rounded-[16px] font-medium hover:opacity-90 transition disabled:opacity-50 flex justify-center items-center gap-2"
+//           className="w-full mt-8 h-14 rounded-2xl bg-primary text-white font-semibold"
 //         >
 //           {loading ? (
-//             <>
+//             <div className="flex items-center justify-center gap-2">
 //               <Loader2 className="animate-spin w-5 h-5" />
-//               Processing
-//               Document...
-//             </>
+//               Comparing...
+//             </div>
 //           ) : (
-//             "Analyze Document"
+//             "Compare Contracts"
 //           )}
 //         </button>
 
-//         {documentText && (
-//           <div className="mt-8 border rounded-[20px] p-6 bg-background">
-//             <h3 className="font-semibold mb-4 text-lg">
-//               Extracted
-//               Text Preview
-//             </h3>
+//         {!!comparison.length && (
+//           <div className="mt-10">
+//             {/* LEFT */}
+//             <div>
+//               <div className="flex justify-between mb-5">
+//                 <h2 className="text-2xl font-bold">
+//                   Comparison
+//                 </h2>
 
-//             <pre className="whitespace-pre-wrap text-sm max-h-[400px] overflow-y-auto">
-//               {documentText.slice(
-//                 0,
-//                 5000
-//               )}
-//             </pre>
-//           </div>
-//         )}
-//         {clauses.length > 0 && (
-//           <div className="mt-8 space-y-4">
-//             <h2 className="text-xl font-semibold">
-//               Extracted Clauses
-//             </h2>
-
-//             {clauses.map(
-//               (
-//                 clause: any,
-//                 index
-//               ) => (
-//                 <div
-//                   key={index}
-//                   className="border rounded-xl p-4"
+//                 <select
+//                   className="border rounded-xl px-4"
+//                   value={
+//                     sortBy
+//                   }
+//                   onChange={(
+//                     e
+//                   ) =>
+//                     setSortBy(
+//                       e.target
+//                         .value
+//                     )
+//                   }
 //                 >
-//                   <h3 className="font-semibold">
-//                     {
-//                       clause.title
-//                     }
-//                   </h3>
+//                   <option value="MODIFIED">
+//                     Modified
+//                     First
+//                   </option>
+//                 </select>
+//               </div>
 
-//                   <p className="text-sm text-muted-foreground mt-2">
-//                     {clause.text.slice(
-//                       0,
-//                       200
-//                     )}
-//                   </p>
-//                 </div>
-//               )
-//             )}
-//           </div>
-//         )}
+//               <div className="space-y-5">
+//                 {sortedComparison.map(
+//                   (
+//                     item,
+//                     index
+//                   ) => (
+//                     <div
+//                       key={
+//                         index
+//                       }
+//                       className="rounded-3xl border bg-card p-6"
+//                     >
+//                       <div className="flex justify-between">
+//                         <h3 className="font-semibold text-lg">
+//                           {
+//                             item.clauseNumber
+//                           }{" "}
+//                           -{" "}
+//                           {
+//                             item.title
+//                           }
+//                         </h3>
 
-//         {risks.length > 0 && (
-//           <div className="mt-8">
-//             <h2 className="text-xl font-semibold mb-4">
-//               Risk Analysis
-//             </h2>
+//                         <span className="rounded-full bg-primary/10 text-primary px-4 py-2 text-sm">
+//                           {
+//                             item.status
+//                           }
+//                         </span>
+//                       </div>
 
-//             <div className="space-y-4">
-//               {risks.map(
-//                 (
-//                   risk,
-//                   index
-//                 ) => (
-//                   <div
-//                     key={index}
-//                     className="border rounded-xl p-4 flex justify-between items-start"
-//                   >
+//                       <ClauseDiff
+//                         diff={
+//                           item.diff
+//                         }
+//                         oldText={
+//                           item.oldText
+//                         }
+//                         newText={
+//                           item.newText
+//                         }
+//                         status={
+//                           item.status
+//                         }
+//                       />
+//                     </div>
+//                   )
+//                 )}
+//               </div>
+//             </div>
+
+//             {/* AI RESULT */}
+//             <div className="mt-12">
+//               <div className="mb-5">
+//                 <h2 className="text-2xl font-bold">
+//                   AI Risk Analysis
+//                 </h2>
+
+//                 <p className="text-muted-foreground text-sm mt-1">
+//                   Change impact &
+//                   legal risk analysis
+//                 </p>
+//               </div>
+
+//               {aiLoading ? (
+//                 <div className="rounded-3xl border bg-card p-8">
+//                   <div className="flex items-center gap-3">
+//                     <Loader2 className="animate-spin text-primary" />
+
 //                     <div>
-//                       <h3 className="font-semibold">
-//                         {
-//                           risk.title
-//                         }
-//                       </h3>
+//                       <p className="font-medium">
+//                         AI analyzing
+//                         contract changes
+//                       </p>
 
-//                       <p className="text-sm text-muted-foreground mt-1">
-//                         {
-//                           risk.reason
-//                         }
+//                       <p className="text-sm text-muted-foreground">
+//                         Detecting legal
+//                         risks...
 //                       </p>
 //                     </div>
-
-//                     <span
-//                       className={`px-3 py-1 rounded-full text-sm font-medium
-//               ${risk.risk ===
-//                           "HIGH"
-//                           ? "bg-red-100 text-red-600"
-//                           : risk.risk ===
-//                             "MEDIUM"
-//                             ? "bg-yellow-100 text-yellow-700"
-//                             : "bg-green-100 text-green-700"
-//                         }`}
-//                     >
-//                       {
-//                         risk.risk
-//                       }
-//                     </span>
 //                   </div>
-//                 )
+//                 </div>
+//               ) : aiError ? (
+//                 <div className="rounded-3xl border border-red-200 bg-red-50 p-6">
+//                   <p className="font-semibold text-red-700">
+//                     AI analysis failed
+//                   </p>
+
+//                   <p className="text-sm text-red-600 mt-2">
+//                     {aiError}
+//                   </p>
+//                 </div>
+//               ) : (
+//                 <AIRiskAnalysis
+//                   risks={aiRisks}
+//                 />
 //               )}
 //             </div>
 //           </div>
 //         )}
 //       </div>
-//     </div>
+//     </main>
 //   );
 // }
+

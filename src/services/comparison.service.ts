@@ -1,7 +1,10 @@
+  import { supabase }
+from "@/lib/supabase/client";
 export const compareDocuments =
   async (
     oldFile: File,
-    newFile: File
+    newFile: File,
+    aiMode = false
   ) => {
     const formData =
       new FormData();
@@ -16,21 +19,54 @@ export const compareDocuments =
       newFile
     );
 
+    formData.append(
+      "aiMode",
+      String(aiMode)
+    );
+
     const response =
       await fetch(
         "/api/compare",
         {
-          method:
-            "POST",
+          method: "POST",
           body: formData,
         }
       );
 
     return response.json();
   };
+// export const compareDocuments =
+//   async (
+//     oldFile: File,
+//     newFile: File
+//   ) => {
+//     const formData =
+//       new FormData();
 
-  import { supabase }
-from "@/lib/supabase/client";
+//     formData.append(
+//       "oldFile",
+//       oldFile
+//     );
+
+//     formData.append(
+//       "newFile",
+//       newFile
+//     );
+
+//     const response =
+//       await fetch(
+//         "/api/compare",
+//         {
+//           method:
+//             "POST",
+//           body: formData,
+//         }
+//       );
+
+//     return response.json();
+//   };
+
+
 export const
 saveComparison =
 async (
