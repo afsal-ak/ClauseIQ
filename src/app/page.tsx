@@ -1,5 +1,5 @@
 import Comparison from "@/components/comparison/comparison";
-import DocumentUpload from "@/components/upload/DocumentUpload";
+import DocumentUpload from "@/components/CompareContracts";
  
 export default function Home() {
    

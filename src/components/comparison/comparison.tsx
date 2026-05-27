@@ -6,9 +6,9 @@ import {
   Loader2,
   Scale,
 } from "lucide-react";
-
 import { compareDocuments } from "@/services/comparison.service";
 
+ 
 export default function Comparison() {
   const [oldFile, setOldFile] =
     useState<File | null>(null);
