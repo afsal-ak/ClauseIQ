@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { processDocument } from "@/lib/document/processor";
 import { legalChunker } from "@/lib/chunker/legalChunker";
 import { analyzeRisk } from "@/lib/risk/riskAnalyzer";
-
+import { saveDocument } from "@/services/document.service";
 
 export async function POST(
   request: Request
@@ -36,6 +36,11 @@ export async function POST(
   analyzeRisk(
     clauses
   );
+  await saveDocument(
+  file.name,
+  extractedText,
+  clauses
+);
     return NextResponse.json({
       success: true,
       filename: file.name,
