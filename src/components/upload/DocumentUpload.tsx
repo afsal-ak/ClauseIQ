@@ -12,17 +12,14 @@ import {
 import { uploadDocument } from "@/services/upload.service";
 
 export default function DocumentUpload() {
-  const [file, setFile] =
-    useState<File | null>(null);
 
-  const [loading, setLoading] =
-    useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [localError, setLocalError] = useState("");
+  const [documentText, setDocumentText] = useState("");
 
-  const [localError, setLocalError] =
-    useState("");
+  const [clauses, setClauses] = useState([]);
 
-  const [documentText, setDocumentText] =
-    useState("");
 
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -108,6 +105,9 @@ export default function DocumentUpload() {
 
         setDocumentText(
           response.extractedText
+        );
+        setClauses(
+          response.clauses
         );
       } catch (error) {
         console.error(error);
@@ -256,6 +256,38 @@ export default function DocumentUpload() {
                 5000
               )}
             </pre>
+          </div>
+        )}
+        {clauses.length > 0 && (
+          <div className="mt-8 space-y-4">
+            <h2 className="text-xl font-semibold">
+              Extracted Clauses
+            </h2>
+
+            {clauses.map(
+              (
+                clause: any,
+                index
+              ) => (
+                <div
+                  key={index}
+                  className="border rounded-xl p-4"
+                >
+                  <h3 className="font-semibold">
+                    {
+                      clause.title
+                    }
+                  </h3>
+
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {clause.text.slice(
+                      0,
+                      200
+                    )}
+                  </p>
+                </div>
+              )
+            )}
           </div>
         )}
       </div>
